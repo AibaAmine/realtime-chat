@@ -51,6 +51,7 @@ ROOT_URLCONF = 'realtime_chat_backend.urls'
 
 TEMPLATES = [
     {
+        django_filters
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [],
         'APP_DIRS': True,
