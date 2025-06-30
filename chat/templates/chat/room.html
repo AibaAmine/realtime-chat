@@ -1,28 +1,17 @@
+<!-- chat/templates/chat/room.html -->
 <!DOCTYPE html>
 <html>
-
 <head>
-    <meta charset="utf-8" />
+    <meta charset="utf-8"/>
     <title>Chat Room</title>
-    <style>
-        #typing-indicator {
-            color: #666;
-            font-style: italic;
-            margin: 5px 0;
-            min-height: 20px;
-        }
-    </style>
 </head>
-
 <body>
     <textarea id="chat-log" cols="100" rows="20"></textarea><br>
-    <div id="typing-indicator"></div>
     <input id="chat-message-input" type="text" size="100"><br>
     <input id="chat-message-submit" type="button" value="Send">
     {{ room_name|json_script:"room-name" }}
     <script>
         const roomName = JSON.parse(document.getElementById('room-name').textContent);
-        let typingTimeout;
 
         const chatSocket = new WebSocket(
             'ws://'
@@ -32,63 +21,30 @@
             + '/'
         );
 
-        chatSocket.onmessage = function (e) {
+        chatSocket.onmessage = function(e) {
             const data = JSON.parse(e.data);
-            if (data.type === 'typing_status') {
-                const typingIndicator = document.querySelector('#typing-indicator');
-                if (data.is_typing) {
-                    typingIndicator.textContent = `${data.username} is typing...`;
-                } else {
-                    typingIndicator.textContent = '';
-                }
-            } else {
-                document.querySelector('#chat-log').value += (data.message + '\n');
-            }
+            document.querySelector('#chat-log').value += (data.message + '\n');
         };
 
-        chatSocket.onclose = function (e) {
+        chatSocket.onclose = function(e) {
             console.error('Chat socket closed unexpectedly');
         };
 
         document.querySelector('#chat-message-input').focus();
-        document.querySelector('#chat-message-input').onkeyup = function (e) {
-            // Send typing status
-            chatSocket.send(JSON.stringify({
-                'type': 'typing',
-                'is_typing': true
-            }));
-
-            // Clear previous timeout
-            clearTimeout(typingTimeout);
-
-            // Set new timeout to clear typing status
-            typingTimeout = setTimeout(() => {
-                chatSocket.send(JSON.stringify({
-                    'type': 'typing',
-                    'is_typing': false
-                }));
-            }, 1000);
-
+        document.querySelector('#chat-message-input').onkeyup = function(e) {
             if (e.key === 'Enter') {  // enter, return
                 document.querySelector('#chat-message-submit').click();
             }
         };
 
-        document.querySelector('#chat-message-submit').onclick = function (e) {
+        document.querySelector('#chat-message-submit').onclick = function(e) {
             const messageInputDom = document.querySelector('#chat-message-input');
             const message = messageInputDom.value;
             chatSocket.send(JSON.stringify({
                 'message': message
             }));
             messageInputDom.value = '';
-
-            // Clear typing status when message is sent
-            chatSocket.send(JSON.stringify({
-                'type': 'typing',
-                'is_typing': false
-            }));
         };
     </script>
 </body>
-
 </html>
