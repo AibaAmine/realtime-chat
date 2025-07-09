@@ -24,3 +24,5 @@ class ChatRoomCreateAPIView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(creator=self.request.user)
+
+# add apis for updating ,deleting rooms
