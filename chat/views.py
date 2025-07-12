@@ -5,6 +5,9 @@ from .serializers import ChatRoomSerializer, ChatRoomCreateSerializer
 from .models import ChatRoom
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.http import FileResponse
+import os
+from django.conf import settings
 
 
 class ChatRoomListAPIView(generics.ListAPIView):
@@ -26,3 +29,8 @@ class ChatRoomCreateAPIView(generics.CreateAPIView):
         serializer.save(creator=self.request.user)
 
 # add apis for updating ,deleting rooms
+
+
+def websocket_docs(request):
+    file_path = os.path.join(settings.BASE_DIR, 'WEBSOCKET_API.md')
+    return FileResponse(open(file_path, 'rb'), content_type='text/markdown')
