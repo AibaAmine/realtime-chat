@@ -11,13 +11,14 @@ class ChatRoomSerializer(serializers.ModelSerializer):
 
     # or we can using :
     # creator = serializers.StringRelatedField(read_only = True)  # show user username instead of his id
-    
+
     message_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatRoom
         fields = [
             "room_id",
+            "room_name",
             "created_at",
             "creator_username",
             "description",

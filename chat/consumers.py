@@ -20,12 +20,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
         self.room_group_name = f"chat_{self.room_name}"
 
+        is_dm_room = self.room_name.startswith("dm_")
+
         # get the room instance or create it if its not founded
-        self.room_obj = await self.get_or_create_room(self.room_name)
+        self.room_obj = await self.get_or_create_room(
+            self.room_name, is_dm_room=is_dm_room
+        )
 
         if not self.room_obj:
             await self.close(code=4000)  # could not get /create room
             return
+
+        # Dm specific authorization check
+        if self.room_obj.is_private:
+            if not await self.is_user_member_of_room(self.room_obj, self.scope["user"]):
+                print(
+                    f"User {self.scope['user'].username} tried to access private room {self.room_name} but is not a member."
+                )
+                await self.close(code=4003)  # 4003 :Forbidden access
+                return
 
         # Join room group
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
@@ -156,11 +169,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
     # -- HELPER METHODS FOR DB OPERATIONS --
 
     @database_sync_to_async
-    def get_or_create_room(self, room_name):
+    def get_or_create_room(self, room_name, is_dm_room=False):
+        room = None
+        created = False 
         try:
-            room, created = ChatRoom.objects.get_or_create(
-                room_name=room_name, defaults={"creator": self.scope["user"]}
-            )
+            if is_dm_room:
+                room = ChatRoom.objects.get(room_name=room_name, is_private=True)
+
+            else:
+                room, created = ChatRoom.objects.get_or_create(
+                    room_name=room_name,
+                    defaults={
+                        "creator": self.scope["user"],
+                        "is_private": False,
+                        "description": f"public chat room : {room_name}",
+                    },
+                )
             if created:
                 print(
                     f"Created new chat room: {room_name} by {self.scope['user'].username}"
@@ -170,6 +194,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             print(f"Error getting/creating chat room {room_name}: {e}")
             return None
+
+    @database_sync_to_async
+    def is_user_member_of_room(self, room, user):
+        if room.is_private:
+            return room.members.filter(id=user.id).exists()
+        return True  # public rooms are open to all authenictated users
 
     @database_sync_to_async
     def save_chat_message(self, room, sender, content):
