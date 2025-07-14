@@ -4,6 +4,7 @@ from .views import (
     ChatRoomListAPIView,
     ChatRoomCreateAPIView,
     PrivateMessageRoomAPIView,
+    ChatRoomRetriveUpdateDeleteAPIView,
     websocket_docs,
 )
 from . import views
@@ -11,6 +12,7 @@ from . import views
 urlpatterns = [
     path("rooms/", ChatRoomListAPIView.as_view(), name="room-list"),
     path("rooms/create/", ChatRoomCreateAPIView.as_view(), name="create-room"),
+    path("rooms/<int:pk>/", views.ChatRoomRetriveUpdateDeleteAPIView.as_view(), name="room-detail"),
     path(
         "dm/<int:target_user_id>",
         PrivateMessageRoomAPIView.as_view(),

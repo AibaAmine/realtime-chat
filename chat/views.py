@@ -35,8 +35,22 @@ class ChatRoomCreateAPIView(generics.CreateAPIView):
         serializer.save(creator=self.request.user)
 
 
-# add apis for updating ,deleting rooms
 
+class ChatRoomRetriveUpdateDeleteAPIView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = ChatRoom.objects.all()
+    serializer_class = ChatRoomSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def perform_update(self, serializer):
+        serializer.save(creator=self.request.user)
+
+    def perform_destroy(self, instance):
+        # Ensure the user is the creator before deleting
+        if instance.creator == self.request.user:
+            instance.delete()
+        else:
+            raise PermissionError("You do not have permission to delete this room.")
 
 class PrivateMessageRoomAPIView(views.APIView):
     permission_classes = [IsAuthenticated]
