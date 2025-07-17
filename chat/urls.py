@@ -7,6 +7,8 @@ from .views import (
     ChatRoomRetriveUpdateDeleteAPIView,
     ChatRoomAddMemberAPIView,
     ChatRoomRemoveMemberAPIView,
+    ChatMessageDeleteAPIView,
+    ChatMessageUpdateAPIView,
     websocket_docs,
 )
 from . import views
@@ -15,7 +17,7 @@ urlpatterns = [
     path("rooms/", ChatRoomListAPIView.as_view(), name="room-list"),
     path("rooms/create/", ChatRoomCreateAPIView.as_view(), name="create-room"),
     path(
-        "rooms/<int:pk>/",
+        "rooms/<uuid:room_id>/",
         views.ChatRoomRetriveUpdateDeleteAPIView.as_view(),
         name="room-detail",
     ),
@@ -33,6 +35,16 @@ urlpatterns = [
         "rooms/<uuid:room_id>/members/remove/<uuid:user_id_to_remove>/",
         ChatRoomRemoveMemberAPIView.as_view(),
         name="chat-room-remove-member",
+    ),
+    path(
+        "messages/<uuid:message_id>/edit/",
+        ChatMessageUpdateAPIView.as_view(),
+        name="chat-message-edit",
+    ),
+    path(
+        "messages/<uuid:message_id>/delete/",
+        ChatMessageDeleteAPIView.as_view(),
+        name="chat-message-delete",
     ),
 ]
 

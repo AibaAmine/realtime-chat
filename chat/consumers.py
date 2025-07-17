@@ -116,7 +116,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 return
 
             # save msg to db
-            await self.save_chat_message(
+            created_msg = await self.save_chat_message(
                 room=self.room_obj, sender=self.scope["user"], content=message_content
             )
 
@@ -125,10 +125,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 self.room_group_name,
                 {
                     "type": "chat.message",
-                    "message": message_content,
-                    "sender_id": str(self.scope["user"].id),
+                    "message_id": str(created_msg.message_id),
+                    "message": created_msg.content,
+                    "sender_id": str(created_msg.sender),
                     "sender_username": self.scope["user"].username,
                     "timestamp": datetime.now().isoformat(),
+                    "edited_at": None,
+                    "is_deleted": False,
                 },
             )
         except json.JSONDecodeError:
@@ -142,9 +145,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 text_data=json.dumps({"error": f"Server error processing message: {e}"})
             )
 
-    # Receive message from room group
+    # Receive message from room group (Handler for message)
     async def chat_message(self, event):
         message = event["message"]
+        message_id = event.get("message_id")
         sender_username = event.get("sender_username", "Unknown")
         sender_id = (
             str(event.get("sender_id", ""))
@@ -153,15 +157,21 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
         timestamp = event.get("timestamp", "")
 
+        edited_at = event.get("edited_at")
+        is_deleted = event.get("is_deleted")
+
         # Send message to WebSocket
         await self.send(
             text_data=json.dumps(
                 {
                     "type": "chat_message",
                     "message": message,
+                    "message_id": message_id,
                     "sender_username": sender_username,
                     "sender_id": sender_id,
                     "timestamp": timestamp,
+                    "edited_at": edited_at,
+                    "is_deleted": is_deleted,
                 }
             )
         )
@@ -171,7 +181,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_or_create_room(self, room_name, is_dm_room=False):
         room = None
-        created = False 
+        created = False
         try:
             if is_dm_room:
                 room = ChatRoom.objects.get(room_name=room_name, is_private=True)
@@ -204,10 +214,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def save_chat_message(self, room, sender, content):
         try:
-            ChatMessage.objects.create(room=room, sender=sender, content=content)
+            created_msg = ChatMessage.objects.create(
+                room=room, sender=sender, content=content
+            )
             print(f"Saved message from {sender.username} to room {room.room_name}")
+            return created_msg
         except Exception as e:
             print(f"Error saving chat message : {e}")
+            return None
 
     # method to get messages history for a room
     @database_sync_to_async
@@ -282,6 +296,35 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 {
                     "type": "room_users_list",
                     "users": event["users"],  # This will be the list of user dicts
+                }
+            )
+        )
+
+    # HANDLER FOR EDITED MESSAGES
+    async def message_edited(self, event):
+
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "message_edited",
+                    "message_id": event["message_id"],
+                    "new_content": event["new_content"],
+                    "edited_at": event["edited_at"],
+                    "room_id": event["room_id"],
+                    "sender_id": event["sender_id"],
+                    "sender_username": event["sender_username"],
+                }
+            )
+        )
+
+    # HANDLER FOR DELETED MESSAGES
+    async def message_deleted(self, event):
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "message_deleted",
+                    "message_id": event["message_id"],
+                    "room_id": event["room_id"],
                 }
             )
         )

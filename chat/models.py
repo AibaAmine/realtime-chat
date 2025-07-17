@@ -55,8 +55,14 @@ class ChatMessage(models.Model):
     content = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
 
+    is_deleted = models.BooleanField(default=False)
+
+    edited_at = models.DateTimeField(null=True, blank=True)
+
     def __str__(self):
-        return f"Message by {self.sender.username} in {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
+        status = "(Deleted)" if self.is_deleted else ""
+        edited_status = "(Edited)" if self.edited_at else ""
+        return f"Message by {self.sender.username} in {self.timestamp.strftime('%Y-%m-%d %H:%M')} {edited_status} {status}".strip()
 
     class Meta:
         ordering = ["timestamp"]  # ordering messages by time

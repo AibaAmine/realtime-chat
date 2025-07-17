@@ -4,7 +4,12 @@ from rest_framework.response import Response
 from rest_framework import generics
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
-from .serializers import ChatRoomSerializer, ChatRoomCreateSerializer
+from .serializers import (
+    ChatRoomSerializer,
+    ChatRoomCreateSerializer,
+    ChatMessageUpdateSerializer,
+    ChatMessageDeleteSerializer,
+)
 from .models import ChatRoom, ChatMessage
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -12,6 +17,9 @@ from rest_framework.exceptions import PermissionDenied
 from django.http import FileResponse
 import os
 from django.conf import settings
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+from datetime import datetime
 
 
 User = get_user_model()
@@ -173,6 +181,66 @@ class PrivateMessageRoomAPIView(views.APIView):
         serializer = ChatRoomSerializer(dm_room)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ChatMessageUpdateAPIView(generics.UpdateAPIView):
+    queryset = ChatMessage.objects.all()
+    serializer_class = ChatMessageUpdateSerializer
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    lookup_field = "message_id"
+
+    def get_queryset(self):
+        return ChatMessage.objects.filter(sender=self.request.user, is_deleted=False)
+
+    def perform_update(self, serializer):
+        updated_message = serializer.save()
+
+        room_group_name = f"chat_{updated_message.room.room_name}"
+
+        channel_layer = get_channel_layer()
+
+        async_to_sync(channel_layer.group_send)(
+            room_group_name,
+            {
+                "type": "message_edited",
+                "message_id": str(updated_message.message_id),
+                "new_content": updated_message.content,
+                "edited_at": updated_message.edited_at.isoformat(),
+                "room_id": str(updated_message.room.room_id),
+                "sender_id": str(updated_message.sender.id),
+                "sender_username": updated_message.sender.username,
+            },
+        )
+
+
+class ChatMessageDeleteAPIView(generics.DestroyAPIView):
+    queryset = ChatMessage.objects.all()
+    serializer_class = ChatMessageDeleteSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    lookup_field = "message_id"
+
+    def get_queryset(self):
+        return ChatMessage.objects.filter(sender=self.request.user, is_deleted=False)
+
+    def perform_destroy(self, instance):
+        instance.is_deleted = True
+        instance.content = "This message has been deleted"
+        instance.edited_at = datetime.now()
+        instance.save()
+
+        room_group_name = f"chat_{instance.room.room_name}"
+        channel_layer = get_channel_layer()
+
+        async_to_sync(channel_layer.group_send)(
+            room_group_name,
+            {
+                "type": "message_deleted",
+                "message_id": str(instance.message_id),
+                "room_id": str(instance.room.room_id),
+            },
+        )
 
 
 def websocket_docs(request):
