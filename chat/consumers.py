@@ -105,10 +105,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.close(code=4001)
             return
 
-        try:
-            text_data_json = json.loads(text_data)
-            message_content = text_data_json.get("message")
+        text_data_json = json.loads(text_data)
 
+        message_type = text_data_json.get("type", "message")  # default : message
+
+        if message_type == "message":
+            await self.handle_chat_message(text_data_json) 
+
+        if message_type == "typing":
+            await self.handle_typing_indicator(text_data_json)  
+
+    async def handle_chat_message(self, data):
+        try:
+            # new format {"type": "message", "content": "text"
+            message_content = data.get("content")
             if not message_content:
                 await self.send(
                     text_data=json.dumps({"error": "Message content is missing"})
@@ -124,7 +134,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
-                    "type": "chat.message",
+                    "type": "chat_message",
                     "message_id": str(created_msg.message_id),
                     "message": created_msg.content,
                     "sender_id": str(created_msg.sender),
@@ -144,6 +154,21 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.send(
                 text_data=json.dumps({"error": f"Server error processing message: {e}"})
             )
+
+    async def handle_typing_indicator(self, data):
+        is_typing = data.get("is_typing", False)
+
+        # Send typing indicator to room group
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                "type": "typing.indicator",
+                "user": self.scope["user"].username,
+                "user_id": str(self.scope["user"].id),
+                "is_typing": is_typing,
+                "room": self.room_name,
+            },
+        )
 
     # Receive message from room group (Handler for message)
     async def chat_message(self, event):
@@ -172,6 +197,29 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "timestamp": timestamp,
                     "edited_at": edited_at,
                     "is_deleted": is_deleted,
+                }
+            )
+        )
+
+    # Handler for typing indicator event (resived from the room group)
+
+    async def typing_indicator(self, event):
+        user = event["user"]
+        room = event["room"]
+        user_id = event["user_id"]
+        is_typing = event["is_typing"]
+
+        if user_id == str(self.scope["user"].id):
+            return
+
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "typing_indicator",
+                    "user": user,
+                    "user_id": user_id,
+                    "room": room,
+                    "is_typing": is_typing,
                 }
             )
         )
